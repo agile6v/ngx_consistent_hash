@@ -2,6 +2,7 @@ About
 ========
 
 The implementation of the consistent hash algorithm.
+
 Using this module, can quickly bulid applications based on consistent hash algorithm.
 
 
