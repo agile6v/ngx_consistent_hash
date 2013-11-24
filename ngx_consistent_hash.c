@@ -17,14 +17,14 @@ static void ngx_conhash_tree_mid_traverse(ngx_rbtree_node_t *node, ngx_rbtree_no
     ngx_conhash_oper_pt func, void *data);
 
 void
-ngx_conhash_destroy(ngx_conhash_t *conhash)
+ngx_conhash_clear(ngx_conhash_t *conhash)
 {
     ngx_rbtree_node_t    *node, *sentinel;
     ngx_conhash_vnode_t  *vnode;
     ngx_conhash_node_t   *hnode;
     ngx_queue_t          *q;
     
-    if (conhash == NULL) {
+    if (conhash == NULL || conhash == NGX_CONF_UNSET_PTR) {
         return;
     }
     
@@ -64,12 +64,20 @@ ngx_conhash_destroy(ngx_conhash_t *conhash)
 }
 
 ngx_int_t
-ngx_conhash_add_node(ngx_conhash_t *conhash, u_char *name, size_t len)
+ngx_conhash_add_node(ngx_conhash_t *conhash, u_char *name, size_t len, void *data)
 {
     ngx_int_t               rc;
     ngx_queue_t            *q;
     ngx_conhash_node_t     *hnode;
     size_t                  size;
+    
+    if (conhash == NULL
+        || conhash == NGX_CONF_UNSET_PTR
+        || conhash->shpool == NULL 
+        || conhash->sh == NULL)
+    {
+        return NGX_ERROR;
+    }
     
     ngx_shmtx_lock(&conhash->shpool->mutex);
     
@@ -97,6 +105,7 @@ ngx_conhash_add_node(ngx_conhash_t *conhash, u_char *name, size_t len)
     
     ngx_memcpy(hnode->name, name, size);
     hnode->name[size] = '\0';
+    hnode->data = data;
     
     rc = ngx_conhash_add_replicas(conhash, hnode);
     if (rc != NGX_OK) {
@@ -118,6 +127,14 @@ ngx_conhash_del_node(ngx_conhash_t *conhash, u_char *name, size_t len)
     ngx_int_t               rc, ret;
     ngx_queue_t            *q;
     ngx_conhash_node_t     *hnode;
+    
+    if (conhash == NULL
+        || conhash == NGX_CONF_UNSET_PTR
+        || conhash->shpool == NULL
+        || conhash->sh == NULL)
+    {
+        return NGX_ERROR;
+    }
     
     rc = NGX_DECLINED;
     
@@ -151,14 +168,14 @@ done:
 }
 
 ngx_conhash_vnode_t*
-ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *key, size_t len)
+ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *name, size_t len)
 {
     ngx_rbtree_key_t      node_key;
     ngx_rbtree_node_t    *node, *sentinel;
     ngx_conhash_vnode_t  *vnode;
     
     vnode = NULL;
-    node_key = conhash->hash_func(key, len);
+    node_key = conhash->hash_func(name, len);
     
     ngx_shmtx_lock(&conhash->shpool->mutex);
     
