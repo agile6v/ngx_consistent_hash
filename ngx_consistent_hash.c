@@ -40,6 +40,7 @@ ngx_conhash_clear(ngx_conhash_t *conhash)
          q = ngx_queue_next(q))
     {
         hnode = ngx_queue_data(q, ngx_conhash_node_t, queue);
+        ngx_slab_free_locked(conhash->shpool, hnode->name.data);
         ngx_slab_free_locked(conhash->shpool, hnode);
         ngx_queue_remove(q);
     }
@@ -87,7 +88,7 @@ ngx_conhash_add_node(ngx_conhash_t *conhash, u_char *name, size_t len, void *dat
     {
         hnode = ngx_queue_data(q, ngx_conhash_node_t, queue);
         if (hnode) {
-            rc = ngx_memn2cmp(hnode->name, name, ngx_strlen(hnode->name), len);
+            rc = ngx_memn2cmp(hnode->name.data, name, hnode->name.len, len);
             if (rc == 0) {
                 rc = NGX_DECLINED;
                 goto done;
@@ -103,12 +104,21 @@ ngx_conhash_add_node(ngx_conhash_t *conhash, u_char *name, size_t len, void *dat
     
     size = (len < NGX_CONHASH_NAME_SIZE) ? len : NGX_CONHASH_NAME_SIZE - 1;
     
-    ngx_memcpy(hnode->name, name, size);
-    hnode->name[size] = '\0';
+    hnode->name.len = size;
+    hnode->name.data = ngx_slab_alloc_locked(conhash->shpool, size + 1);
+    if (hnode->name.data == NULL) {
+        ngx_slab_free_locked(conhash->shpool, hnode);
+        rc = NGX_ERROR;
+        goto done;
+    }
+    
+    ngx_memcpy(hnode->name.data, name, size);
+    hnode->name.data[size] = '\0';
     hnode->data = data;
     
     rc = ngx_conhash_add_replicas(conhash, hnode);
     if (rc != NGX_OK) {
+        ngx_slab_free_locked(conhash->shpool, hnode->name.data);
         ngx_slab_free_locked(conhash->shpool, hnode);
         goto done;
     }
@@ -146,7 +156,7 @@ ngx_conhash_del_node(ngx_conhash_t *conhash, u_char *name, size_t len)
     {
         hnode = ngx_queue_data(q, ngx_conhash_node_t, queue);
         
-        ret = ngx_memn2cmp(hnode->name, name, ngx_strlen(hnode->name), len);
+        ret = ngx_memn2cmp(hnode->name.data, name, hnode->name.len, len);
 
         if (ret == 0) {
         
@@ -155,6 +165,7 @@ ngx_conhash_del_node(ngx_conhash_t *conhash, u_char *name, size_t len)
                 goto done;
             }
             
+            ngx_slab_free_locked(conhash->shpool, hnode->name.data);
             ngx_slab_free_locked(conhash->shpool, hnode);
             ngx_queue_remove(q);
             break;
@@ -167,12 +178,14 @@ done:
     return rc;
 }
 
-ngx_conhash_vnode_t*
-ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *name, size_t len)
+ngx_int_t
+ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *name, size_t len, 
+    ngx_conhash_oper_pt func, void *data)
 {
     ngx_rbtree_key_t      node_key;
     ngx_rbtree_node_t    *node, *sentinel;
     ngx_conhash_vnode_t  *vnode;
+    ngx_int_t             rc;
     
     vnode = NULL;
     node_key = conhash->hash_func(name, len);
@@ -183,6 +196,7 @@ ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *name, size_t len)
     sentinel = conhash->sh->vnode_tree.sentinel;
     
     if (node == sentinel) {
+        rc = NGX_DECLINED;
         goto done;
     }
     
@@ -204,11 +218,15 @@ ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *name, size_t len)
         node = ngx_rbtree_min(conhash->sh->vnode_tree.root, sentinel);
         vnode = (ngx_conhash_vnode_t *) node;
     }
+    
+    func(vnode, data);
+    
+    rc = NGX_OK;
 
 done:
     ngx_shmtx_unlock(&conhash->shpool->mutex);
     
-    return vnode;
+    return rc;
 }
 
 static ngx_rbtree_node_t*
@@ -315,7 +333,7 @@ ngx_conhash_del_replicas(ngx_conhash_t *conhash, ngx_conhash_node_t *hnode, ngx_
     ngx_conhash_vnode_t *vnode;
     ngx_rbtree_node_t   *node;
     
-    for (i = 0; i < conhash->vnodecnt; i++) {
+    for (i = 0; i < replicas; i++) {
         
         ngx_memzero(name, sizeof(name));
         
@@ -351,7 +369,7 @@ ngx_conhash_make_vnode_name(ngx_conhash_t *conhash, ngx_str_t *name,
 {
     u_char      *p;
     
-    name->len = ngx_strlen(hnode->name) + 5;
+    name->len = hnode->name.len + 5;
     
     if (name->data == NULL) {
         name->data = ngx_slab_alloc_locked(conhash->shpool, name->len + 1);
@@ -361,7 +379,7 @@ ngx_conhash_make_vnode_name(ngx_conhash_t *conhash, ngx_str_t *name,
     }
     
     p = name->data;
-    p = ngx_sprintf(p, "%s-%04ui", hnode->name, index);
+    p = ngx_sprintf(p, "%V-%04ui", &hnode->name, index);
     *p++ = '\0';
 
     return NGX_OK;
