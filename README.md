@@ -24,8 +24,9 @@ ngx_conhash_add_node(ngx_conhash_t *conhash, u_char *name, size_t len, void *dat
 ngx_int_t 
 ngx_conhash_del_node(ngx_conhash_t *conhash, u_char *name, size_t len);
 
-ngx_conhash_vnode_t* 
-ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *key, size_t len);
+ngx_int_t 
+ngx_conhash_lookup_node(ngx_conhash_t *conhash, u_char *name, size_t len,
+    ngx_conhash_oper_pt func, void *data);
 
 void 
 ngx_conhash_clear(ngx_conhash_t *conhash);
