@@ -5,6 +5,7 @@ The implementation of the consistent hash algorithm.
 
 Using this module, can quickly bulid applications based on consistent hash algorithm.
 
+Note: This module is suitable for senarious that do not care about the performace of the concurrency.
 
 API
 ========
