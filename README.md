@@ -3,7 +3,7 @@ ngx_consistent_hash
 
 The implementation of the consistent hashing algorithm.
 
-This Module(also a library) is based on Nginx's shared memory and red-black tree. If your application(or module) needs to use a consistent hashing algorithm(You need to know what problem it solves.) and work among worker processes at the same time, then this module is perfect for you.
+This module (*also a library*) is based on Nginx's shared memory and red-black tree. If your application (*or module*) needs to use a consistent hashing algorithm (*You need to know what problem it solves.*) and work among worker processes at the same time, then this module is perfect for you.
 
 **Performance**: Anyone who has used the Nginx proxy cache knows that the metadata of the cache is stored using shared memory and is synchronized using lock among worker processes. If you can accept the performance of the proxy cache, then you can accept it as well.
 
