@@ -1,19 +1,20 @@
-About
+ngx_consistent_hash
 ========
 
-The implementation of the consistent hash algorithm.
+The implementation of the consistent hashing algorithm.
 
-Using this module, can quickly bulid applications based on consistent hash algorithm.
+This Module(also a library) is based on Nginx's shared memory and red-black tree. If your application(or module) needs to use a consistent hashing algorithm(You need to know what problem it solves.) and work among worker processes at the same time, then this module is perfect for you.
+
+Performance: Anyone who has used the Nginx proxy cache knows that the metadata of the cache is stored using shared memory and is synchronized using lock among worker processes. If you can accept the performance of the proxy cache, then you can accept it as well.
 
 API
 ========
 
-If you want to use this module, will invoke these APIs.
-
-[ngx_http_conhash_test_module][] to show you how to use these APIs.
+This module provieds the following APIs. [ngx_http_conhash_test_module][] module can help you better understand how to use these APIs.
 
 ```bash
 
+// This api uses the inorder traversal to traverse the entire red-black tree. Please use cauation if the number of nodes is large.
 ngx_int_t 
 ngx_conhash_node_traverse(ngx_conhash_t *conhash, ngx_conhash_oper_pt func, void *data);
 
